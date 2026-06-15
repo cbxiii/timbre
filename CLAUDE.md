@@ -38,9 +38,23 @@ npm run lint     # run ESLint
 
 No test runner is configured yet.
 
+## Current implementation state
+
+The "Product vision" above is the **target**, not what's built. As of now the repo is a fresh `create-next-app` scaffold plus a single feature slice:
+
+- **Built:** the auth backend — `signup` and `[...nextauth]` route handlers (see Auth flow below).
+- **Default scaffold (not yet product UI):** `app/page.tsx` is still the Next.js starter template, and `app/layout.tsx` metadata still reads "Create Next App".
+- **Not started:** the entire discovery loop (seed input UI, Last.fm integration, LLM refinement, swipe UI, playlist construction), the `/auth/signin` page, and playlist persistence.
+
+When building the discovery loop, note two dependency gaps:
+- `@supabase/supabase-js` is imported directly in the auth handlers but is only present **transitively** (via `@auth/supabase-adapter`). Add it to `package.json` dependencies before relying on it.
+- `@anthropic-ai/sdk` is **not installed**, despite `ANTHROPIC_API_KEY` being documented. Install it before building the LLM step. Use the latest Claude models (see the `claude-api` skill for current model IDs).
+
 ## Architecture
 
 **Timbre** is a Next.js 16 app with App Router, React 19, TypeScript, Tailwind CSS v4, NextAuth v4, and Supabase.
+
+> Next.js 16 has breaking changes vs. earlier versions (see `AGENTS.md`). Consult `node_modules/next/dist/docs/` (`01-app`, `03-architecture`) before writing framework code rather than relying on prior Next.js knowledge.
 
 ### Auth flow
 
@@ -54,8 +68,14 @@ No test runner is configured yet.
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public client key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-only) |
 | `NEXTAUTH_SECRET` | NextAuth JWT signing secret |
+| `NEXTAUTH_URL` | Canonical app URL for NextAuth callbacks |
+| `LASTFM_API_KEY` | Last.fm API — powers the similar-artists/top-tracks discovery engine |
+| `ANTHROPIC_API_KEY` | Claude API — powers the LLM curation/refinement step (the "LLM" in the product vision is Anthropic Claude) |
+
+> The `.env` also carries `DB_PASSWORD`, `SHARED_SECRET`, and additional Supabase key variants; confirm their use before relying on them.
 
 ### Path aliases
 
