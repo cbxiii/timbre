@@ -2,13 +2,6 @@
 
 import { MOODS, type Mood } from "@/lib/types";
 
-const MOOD_EMOJI: Record<Mood, string> = {
-  chill: "🌊",
-  energetic: "⚡",
-  melancholic: "🌧️",
-  hype: "🔥",
-};
-
 type MoodSelectorProps = {
   moods: Mood[];
   onToggle: (mood: Mood) => void;
@@ -27,15 +20,12 @@ export default function MoodSelector({ moods, onToggle }: MoodSelectorProps) {
               type="button"
               aria-pressed={selected}
               onClick={() => onToggle(mood)}
-              className={`flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-sm capitalize transition-colors ${
+              className={`flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-sm capitalize cursor-pointer transition-colors ${
                 selected
                   ? "border-neon bg-neon/15 text-neon"
                   : "border-neon/20 text-muted hover:border-neon/50"
               }`}
             >
-              <span aria-hidden className="text-lg">
-                {MOOD_EMOJI[mood]}
-              </span>
               {mood}
             </button>
           );
