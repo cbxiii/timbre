@@ -33,7 +33,7 @@ export default function TimbreForm() {
     );
   }
 
-  function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (artists.length === 0) {
       setError("Add at least one artist to get started.");

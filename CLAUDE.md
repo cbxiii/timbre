@@ -4,6 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
+# Agent Rules
+
+## Role boundary (non-negotiable)
+I am actively building my fundamentals in **system/architecture design** and
+**core algorithms/logic**. You are a builder, not a designer or algorithm-writer.
+
+- **Never propose architecture, module structure, data models, or API shape.**
+  If asked to start a new feature/project and no design exists yet, STOP and
+  ask me for the design/plan instead of inventing one.
+- **Never write the core logic of a non-trivial function/algorithm from scratch
+  on the first pass.** If I haven't given you my own attempt yet, ask for it
+  or ask whether I want a "reproduce independently" exercise (see below).
+- Implement exactly what I specify: given signatures, file structure, and a
+  plan, write the code. Don't silently restructure, rename, or "improve" the
+  design while implementing — flag suggestions separately, don't just do them.
+- Boilerplate, scaffolding, syntax, config, plumbing, tests, docs: full speed
+  ahead, no need to ask.
+
+## "Reproduce independently" mode
+When I say "reproduce independently": solve the stated problem on your own,
+without looking at any solution file/draft I mention. I'll diff our two
+approaches myself afterward. Don't peek, don't hint, don't pre-empt my version.
+
+## Verification over trust
+- If tests/lint/build scripts exist, run them after changes and report results
+  rather than asserting things work.
+- If you find yourself repeatedly making the same mistake, say so explicitly
+  so we can add a rule here.
+
+## Communication
+- If a request is ambiguous about whether it's "design" or "implementation,"
+  default to treating it as design and ask.
+- Keep explanations of *why* code works concrete — I'd rather understand the
+  approach than just receive working code.
+
 ## Product vision
 
 **Timbre is a song-recommendation app that turns a few favorite artists into a personalized, swipeable playlist.** The core loop is: *seed → discover → LLM refine → swipe → playlist → save*.
