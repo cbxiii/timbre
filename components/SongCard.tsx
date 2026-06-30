@@ -1,10 +1,8 @@
 import type { CSSProperties } from "react";
+import type { RecommendedSongWithDesc } from "@/lib/types";
 
-export type Song = {
-  title: string;
-  artist: string;
-  description: string;
-};
+// How many tags to surface on the card before they overflow the layout.
+const MAX_TAGS = 3;
 
 // Distance (px) a card must be dragged before a swipe commits. Shared with
 // SwipeDeck so the outline reaches full color exactly at the commit point.
@@ -17,7 +15,7 @@ const NEON_RGB = "57, 255, 20"; // #39ff14
 const DANGER_RGB = "255, 92, 92"; // #ff5c5c
 
 type SongCardProps = {
-  song: Song;
+  song: RecommendedSongWithDesc;
   dragX: number;
   style?: CSSProperties;
 };
@@ -44,6 +42,32 @@ export default function SongCard({ song, dragX, style }: SongCardProps) {
       <p className="mt-auto text-sm leading-relaxed text-muted">
         {song.description}
       </p>
+
+      {song.tags.length > 0 && (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {song.tags.slice(0, MAX_TAGS).map((tag) => (
+            <li
+              key={tag}
+              className="rounded-full border border-muted/40 px-2 py-0.5 text-xs text-muted"
+            >
+              {tag}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <a
+        href={song.link}
+        target="_blank"
+        rel="noopener noreferrer"
+        // The card sits inside SwipeDeck's pointer-capture wrapper; stop these
+        // so tapping the link opens it instead of starting a drag.
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className="mt-4 text-sm font-semibold text-neon transition-colors hover:text-neon-dim"
+      >
+        ▶ Listen on YouTube
+      </a>
     </div>
   );
 }

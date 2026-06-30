@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState, type PointerEvent } from "react";
-import SongCard, { SWIPE_THRESHOLD, type Song } from "./SongCard";
+import type { RecommendedSongWithDesc } from "@/lib/types";
+import SongCard, { SWIPE_THRESHOLD } from "./SongCard";
 
 type SwipeDeckProps = {
-  songs: Song[];
+  songs: RecommendedSongWithDesc[];
 };
 
 type Direction = "like" | "dislike";
@@ -13,8 +14,8 @@ const EXIT_MS = 300;
 
 export default function SwipeDeck({ songs }: SwipeDeckProps) {
   const [index, setIndex] = useState(0);
-  const [liked, setLiked] = useState<Song[]>([]);
-  const [notLiked, setNotLiked] = useState<Song[]>([]);
+  const [liked, setLiked] = useState<RecommendedSongWithDesc[]>([]);
+  const [notLiked, setNotLiked] = useState<RecommendedSongWithDesc[]>([]);
   const [dragX, setDragX] = useState(0);
   // When true, the card animates (snap-back or fly-off); during a live drag we
   // want the card to track the pointer with no transition lag.

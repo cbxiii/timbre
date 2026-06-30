@@ -1,7 +1,45 @@
 import { NextResponse } from "next/server";
-// YOU (Step 1): import your request/response types from "@/lib/types".
-// YOU (Step 3): import your helper + its error type, e.g.
-//   import { refineRecommendations, RefineError } from "@/lib/refine";
+import {
+  MOODS,
+  type Mood,
+  type RefineRequest,
+  type SearchParams,
+  type RecommendedTrack,
+} from "@/lib/types";
+import { RefineError, refineRecommendations } from "@/lib/refine";
+
+/** A 400 with a consistent shape, so every validation failure looks the same. */
+function badRequest(message: string) {
+  return NextResponse.json({ error: message }, { status: 400 });
+}
+
+/** Narrow an arbitrary candidate to RecommendedTrack — the route trusts the
+ * client to have built these from /top-tracks, so we only check the fields
+ * refineRecommendations actually reads. */
+function isRecommendedTrack(v: unknown): v is RecommendedTrack {
+  if (typeof v !== "object" || v === null) return false;
+  const t = v as Record<string, unknown>;
+  return typeof t.title === "string" && typeof t.artist === "string";
+}
+
+/** Narrow the seed params: 1–3 artists, known moods, adventurousness 0–100. */
+function isSearchParams(v: unknown): v is SearchParams {
+  if (typeof v !== "object" || v === null) return false;
+  const p = v as Record<string, unknown>;
+  const artistsOk =
+    Array.isArray(p.artists) &&
+    p.artists.length >= 1 &&
+    p.artists.length <= 3 &&
+    p.artists.every((a) => typeof a === "string" && a.trim().length > 0);
+  const moodsOk =
+    Array.isArray(p.moods) &&
+    p.moods.every((m) => MOODS.includes(m as Mood));
+  const advOk =
+    typeof p.adventurousness === "number" &&
+    p.adventurousness >= 0 &&
+    p.adventurousness <= 100;
+  return artistsOk && moodsOk && advOk;
+}
 
 export async function POST(request: Request) {
   // 1. Parse the body. A malformed/empty body makes request.json() throw,
@@ -10,37 +48,41 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Request body must be valid JSON" },
-      { status: 400 }
-    );
+    return badRequest("Request body must be valid JSON");
   }
 
-  // 2. Validate inputs. This only checks the body is an object — replace it
-  //    with real validation and narrow `body` to your Step-1 request type,
-  //    mirroring the early-return style in app/api/recommend/similar/route.ts.
-  // YOU (Step 2): which fields are required (seed artists, candidate songs, …)?
+  // 2. Validate inputs and narrow `body` to RefineRequest. The client owns
+  //    discovery (calling /similar + /top-tracks), so we require both the seed
+  //    `params` and the `candidates` pool it assembled.
   if (typeof body !== "object" || body === null) {
-    return NextResponse.json(
-      { error: "Request body is required" },
-      { status: 400 }
+    return badRequest("Request body is required");
+  }
+  const { params, candidates } = body as Record<string, unknown>;
+  if (!isSearchParams(params)) {
+    return badRequest(
+      "`params` must have 1–3 artists, valid moods, and adventurousness 0–100"
     );
   }
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return badRequest("`candidates` must be a non-empty array");
+  }
+  if (!candidates.every(isRecommendedTrack)) {
+    return badRequest("Each candidate must have a string `title` and `artist`");
+  }
+  const refineRequest: RefineRequest = { params, candidates };
 
-  // 3. Call your LLM helper and return its result.
+  // 3. Refine the client-supplied pool and return the curated songs.
   try {
-    // YOU (Step 3): const result = await refineRecommendations(body);
-    //               return NextResponse.json(result);
-    return NextResponse.json(
-      { error: "Not implemented yet" },
-      { status: 501 }
+    const result = await refineRecommendations(
+      refineRequest.params,
+      refineRequest.candidates
     );
+    return NextResponse.json(result);
   } catch (err) {
-    // YOU (Step 3): if your helper throws a custom error carrying a `.status`
-    //   (mirror LastfmError in lib/lastfm.ts), map it here before the 500:
-    //   if (err instanceof RefineError) {
-    //     return NextResponse.json({ error: err.message }, { status: err.status });
-    //   }
+    // RefineError carries a `.status` (mirrors LastfmError); map it before the 500.
+    if (err instanceof RefineError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     console.error("refine route failed:", err);
     return NextResponse.json(
       { error: "Failed to refine recommendations" },

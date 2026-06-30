@@ -30,3 +30,22 @@ export interface RecommendedTrack {
   /** Top tags, from track.getInfo. */
   tags: string[];
 }
+
+/** The body POSTed to `/api/recommend/refine`: the user's seed params plus the
+ * candidate pool the client assembled from `/similar` + `/top-tracks`. */
+export interface RefineRequest {
+  params: SearchParams;
+  candidates: RecommendedTrack[];
+}
+
+/**
+ * A curated track from the LLM refine step (`/api/recommend/refine`): a
+ * candidate `RecommendedTrack` plus the LLM's "why it fits" blurb and a link to
+ * listen. `description` comes from the LLM; `link` is attached by our code.
+ */
+export interface RecommendedSongWithDesc extends RecommendedTrack {
+  /** LLM-written explanation of why this song fits the seed/mood. */
+  description: string;
+  /** Link to listen to the track (a YouTube search URL for now). */
+  link: string;
+}

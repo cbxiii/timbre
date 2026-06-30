@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import type { Mood } from "@/lib/types";
 import ArtistTagInput from "./ArtistTagInput";
@@ -13,6 +14,7 @@ export default function TimbreForm() {
   const [adventurousness, setAdventurousness] = useState(50);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   function addArtist(raw: string) {
     const name = raw.trim();
@@ -41,7 +43,14 @@ export default function TimbreForm() {
       return;
     }
     setError(null);
-    // TODO: hand off { artists, moods, adventurousness } to the discovery flow.
+
+    // Hand the seed off to /swipe via query params: one `artist`/`mood` entry
+    // each, plus `adv`. The swipe page reads these and runs the discovery flow.
+    const qs = new URLSearchParams();
+    artists.forEach((a) => qs.append("artist", a));
+    moods.forEach((m) => qs.append("mood", m));
+    qs.set("adv", String(adventurousness));
+    router.push(`/swipe?${qs.toString()}`);
   }
 
   return (
