@@ -3,6 +3,7 @@
 import { useRef, useState, type PointerEvent } from "react";
 import type { RecommendedSongWithDesc } from "@/lib/types";
 import SongCard, { SWIPE_THRESHOLD } from "./SongCard";
+import Link from "next/link";
 
 type SwipeDeckProps = {
   songs: RecommendedSongWithDesc[];
@@ -78,7 +79,7 @@ export default function SwipeDeck({ songs }: SwipeDeckProps) {
 
   if (done) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-6">
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
         <div className="w-80 rounded-2xl border-2 border-neon bg-bg-elevated p-6 text-center">
           <h2 className="text-2xl font-bold text-neon">All done</h2>
           <p className="mt-2 text-sm text-muted">
@@ -111,14 +112,20 @@ export default function SwipeDeck({ songs }: SwipeDeckProps) {
           type="button"
           className="w-80 rounded-xl bg-neon py-3 font-semibold text-bg transition-colors hover:bg-neon-dim"
         >
-          Get my playlist
+          Get my taste profile
         </button>
+        <Link
+          href="/"
+          className="w-80 rounded-xl bg-danger py-3 font-semibold text-bg text-center transition-colors hover:bg-red-700"
+        >
+          Start over
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-6">
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6">
       <div
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -151,6 +158,16 @@ export default function SwipeDeck({ songs }: SwipeDeckProps) {
         >
           ♥
         </button>
+      </div>
+
+      <div className="flex gap-6 text-sm text-muted">
+        <span className="w-14 text-center">
+          <span className="font-semibold text-danger">{notLiked.length}</span>{" "}
+          disliked
+        </span>
+        <span className="w-14 text-center">
+          <span className="font-semibold text-neon">{liked.length}</span> liked
+        </span>
       </div>
     </div>
   );

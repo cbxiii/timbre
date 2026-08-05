@@ -29,7 +29,7 @@ export default function SongCard({ song, dragX, style }: SongCardProps) {
 
   return (
     <div
-      className="flex h-96 w-80 flex-col rounded-2xl border-2 bg-bg-elevated p-6 shadow-xl select-none"
+      className="flex h-96 w-80 flex-col rounded-2xl border-2 ring-2 bg-bg-elevated p-6 shadow-xl select-none"
       style={{
         borderColor,
         transform: `translateX(${dragX}px) rotate(${dragX * 0.04}deg)`,

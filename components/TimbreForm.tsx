@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import type { Mood } from "@/lib/types";
 import ArtistTagInput from "./ArtistTagInput";
 import CustomizeSection from "./CustomizeSection";
+import TimbreTitle from "./TimbreTitle";
 
 const MAX_ARTISTS = 3;
 
@@ -58,9 +59,7 @@ export default function TimbreForm() {
       onSubmit={handleSubmit}
       className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-12"
     >
-      <h1 className="text-center text-4xl font-bold tracking-[0.3em] text-neon">
-        TIMBRE
-      </h1>
+      <TimbreTitle />
 
       <ArtistTagInput
         artists={artists}

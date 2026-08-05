@@ -1,4 +1,8 @@
-import type { SimilarArtist, RecommendedTrack } from "@/lib/types";
+import type {
+  ArtistSuggestion,
+  SimilarArtist,
+  RecommendedTrack,
+} from "@/lib/types";
 
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 
@@ -65,6 +69,14 @@ interface RawTag {
   name: string;
 }
 
+interface RawArtistSearchResponse {
+  results?: {
+    artistmatches?: {
+      artist?: Array<{ name: string; listeners: string }>;
+    };
+  };
+}
+
 interface RawSimilarResponse {
   similarartists?: {
     artist?: Array<{ name: string; match: string }>;
@@ -123,6 +135,38 @@ async function getTrackTags(artist: string, track: string): Promise<string[]> {
     track,
   });
   return toTags(data.track?.toptags?.tag);
+}
+
+/**
+ * Artists whose names match `query`, for the seed-screen typeahead.
+ *
+ * Unlike the functions below there is deliberately no per-result enrichment
+ * fan-out: this runs on keystrokes, and artist.search already returns the
+ * listener count we display. Last.fm's raw ordering is noisy and repeats names
+ * across mbids, so we dedupe by name and re-rank by popularity.
+ */
+export async function searchArtists(
+  query: string,
+  limit: number
+): Promise<ArtistSuggestion[]> {
+  const data = await lastfmFetch<RawArtistSearchResponse>("artist.search", {
+    artist: query,
+    limit,
+  });
+  const matches = data.results?.artistmatches?.artist ?? [];
+
+  const byName = new Map<string, ArtistSuggestion>();
+  for (const match of matches) {
+    const name = match.name?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (byName.has(key)) continue;
+    byName.set(key, { name, listenerCount: toNumber(match.listeners) });
+  }
+
+  return [...byName.values()]
+    .sort((a, b) => b.listenerCount - a.listenerCount)
+    .slice(0, limit);
 }
 
 /**

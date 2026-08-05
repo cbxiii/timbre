@@ -10,6 +10,13 @@ export interface SearchParams {
   adventurousness: number;
 }
 
+/** An artist suggestion returned by `/api/artists/search` (from Last.fm artist.search). */
+export interface ArtistSuggestion {
+  name: string;
+  /** Global listener count, from artist.search. */
+  listenerCount: number;
+}
+
 /** A similar artist returned by `/api/recommend/similar` (from Last.fm artist.getSimilar + getInfo). */
 export interface SimilarArtist {
   artist: string;

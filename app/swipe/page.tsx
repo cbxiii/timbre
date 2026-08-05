@@ -30,7 +30,7 @@ export default async function SwipePage({
 
   if (artists.length === 0) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
         <p className="text-lg text-muted">
           No artists to discover from. Start by picking a few.
         </p>

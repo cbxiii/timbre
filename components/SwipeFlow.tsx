@@ -166,7 +166,7 @@ export default function SwipeFlow({ params }: SwipeFlowProps) {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
       {children}
     </div>
   );
