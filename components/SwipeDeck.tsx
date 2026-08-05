@@ -1,22 +1,26 @@
 "use client";
 
-import { useRef, useState, type PointerEvent } from "react";
-import type { RecommendedSongWithDesc } from "@/lib/types";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+import type { RecommendedSongWithDesc, Verdict } from "@/lib/types";
 import SongCard, { SWIPE_THRESHOLD } from "./SongCard";
-import Link from "next/link";
 
 type SwipeDeckProps = {
   songs: RecommendedSongWithDesc[];
+  /** Verdicts recorded so far, owned by SwipeFlow (the taste map needs them). */
+  verdicts: Map<string, Verdict>;
+  onVerdict: (song: RecommendedSongWithDesc, verdict: Verdict) => void;
+  onFinished: () => void;
 };
-
-type Direction = "like" | "dislike";
 
 const EXIT_MS = 300;
 
-export default function SwipeDeck({ songs }: SwipeDeckProps) {
+export default function SwipeDeck({
+  songs,
+  verdicts,
+  onVerdict,
+  onFinished,
+}: SwipeDeckProps) {
   const [index, setIndex] = useState(0);
-  const [liked, setLiked] = useState<RecommendedSongWithDesc[]>([]);
-  const [notLiked, setNotLiked] = useState<RecommendedSongWithDesc[]>([]);
   const [dragX, setDragX] = useState(0);
   // When true, the card animates (snap-back or fly-off); during a live drag we
   // want the card to track the pointer with no transition lag.
@@ -28,16 +32,24 @@ export default function SwipeDeck({ songs }: SwipeDeckProps) {
   const current = songs[index];
   const done = index >= songs.length;
 
+  // Hand the deck off to SwipeFlow from an effect, not from render — calling a
+  // parent's setter during render is not allowed.
+  useEffect(() => {
+    if (done) onFinished();
+  }, [done, onFinished]);
+
+  let liked = 0;
+  let disliked = 0;
+  for (const verdict of verdicts.values()) {
+    if (verdict === "like") liked++;
+    else disliked++;
+  }
+
   // Record the like/dislike, fling the card off-screen, then advance once the
   // exit animation finishes. Both the buttons and a committed drag call this.
-  function commit(direction: Direction) {
+  function commit(direction: Verdict) {
     if (transitioning || done) return;
-    const song = songs[index];
-    if (direction === "like") {
-      setLiked((prev) => [...prev, song]);
-    } else {
-      setNotLiked((prev) => [...prev, song]);
-    }
+    onVerdict(songs[index], direction);
 
     dragging.current = false;
     setTransitioning(true);
@@ -78,48 +90,10 @@ export default function SwipeDeck({ songs }: SwipeDeckProps) {
   }
 
   if (done) {
+    // One frame at most: the effect above hands off to the taste map.
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
-        <div className="w-80 rounded-2xl border-2 border-neon bg-bg-elevated p-6 text-center">
-          <h2 className="text-2xl font-bold text-neon">All done</h2>
-          <p className="mt-2 text-sm text-muted">
-            You swiped through {songs.length}{" "}
-            {songs.length === 1 ? "song" : "songs"}.
-          </p>
-
-          <div className="mt-6 text-left">
-            <p className="text-sm font-semibold text-neon">
-              Liked ({liked.length})
-            </p>
-            <ul className="mt-1 text-sm text-muted">
-              {liked.map((s) => (
-                <li key={`${s.title}-${s.artist}`}>{s.title}</li>
-              ))}
-            </ul>
-
-            <p className="mt-4 text-sm font-semibold text-danger">
-              Not liked ({notLiked.length})
-            </p>
-            <ul className="mt-1 text-sm text-muted">
-              {notLiked.map((s) => (
-                <li key={`${s.title}-${s.artist}`}>{s.title}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="w-80 rounded-xl bg-neon py-3 font-semibold text-bg transition-colors hover:bg-neon-dim"
-        >
-          Get my taste profile
-        </button>
-        <Link
-          href="/"
-          className="w-80 rounded-xl bg-danger py-3 font-semibold text-bg text-center transition-colors hover:bg-red-700"
-        >
-          Start over
-        </Link>
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <p className="text-lg text-neon">Building your taste map…</p>
       </div>
     );
   }
@@ -162,11 +136,11 @@ export default function SwipeDeck({ songs }: SwipeDeckProps) {
 
       <div className="flex gap-6 text-sm text-muted">
         <span className="w-14 text-center">
-          <span className="font-semibold text-danger">{notLiked.length}</span>{" "}
+          <span className="font-semibold text-danger">{disliked}</span>{" "}
           disliked
         </span>
         <span className="w-14 text-center">
-          <span className="font-semibold text-neon">{liked.length}</span> liked
+          <span className="font-semibold text-neon">{liked}</span> liked
         </span>
       </div>
     </div>

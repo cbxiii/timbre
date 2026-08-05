@@ -56,3 +56,41 @@ export interface RecommendedSongWithDesc extends RecommendedTrack {
   /** Link to listen to the track (a YouTube search URL for now). */
   link: string;
 }
+
+/** A swipe outcome for a single song. */
+export type Verdict = "like" | "dislike";
+
+/**
+ * An artist node on the taste map.
+ *
+ * Seed artists deliberately carry no tags: they sit at the center, so their
+ * lateral position is irrelevant, and their links to everything else come from
+ * `seedMatch`. That saves an artist.getInfo call per seed.
+ */
+export interface MapArtist {
+  artist: string;
+  /** True for the 1–3 artists the user typed. */
+  isSeed: boolean;
+  /** Best 0–1 Last.fm match against any seed; 1 for seeds themselves. */
+  seedMatch: number;
+  /** Global listener count, from artist.getInfo. 0 for seeds. */
+  listenerCount: number;
+  /** Top tags, from artist.getInfo. Empty for seeds. */
+  tags: string[];
+  /** Curated songs by this artist from the refine step; may be empty. */
+  songs: RecommendedSongWithDesc[];
+}
+
+/** Blended pairwise similarity between two map artists, keyed by artist name. */
+export interface ArtistLink {
+  source: string;
+  target: string;
+  /** 0–1: Last.fm match where known, IDF-weighted tag overlap elsewhere. */
+  sim: number;
+}
+
+/** Everything the taste map needs to lay itself out. */
+export interface TasteMapGraph {
+  artists: MapArtist[];
+  links: ArtistLink[];
+}

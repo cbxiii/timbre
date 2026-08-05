@@ -197,6 +197,29 @@ export async function getSimilarArtists(
 }
 
 /**
+ * Similar-artist names and match scores only — deliberately no getInfo
+ * enrichment, unlike `getSimilarArtists` above.
+ *
+ * This powers the taste-map similarity matrix, which needs match scores between
+ * *discovered* artists. Listener counts and tags for those artists are already
+ * known from the `getSimilarArtists` pass, so re-fetching them would be an N+1
+ * fan-out for data we hold. One flat call per artist instead of one plus N.
+ */
+export async function getSimilarNames(
+  artist: string,
+  limit: number
+): Promise<Array<{ artist: string; match: number }>> {
+  const data = await lastfmFetch<RawSimilarResponse>("artist.getSimilar", {
+    artist,
+    limit,
+  });
+  return (data.similarartists?.artist ?? []).map((a) => ({
+    artist: a.name,
+    match: Number.parseFloat(a.match) || 0,
+  }));
+}
+
+/**
  * Top tracks for `artist`, enriched with each track's tags.
  * Enrichment is an N+1 fan-out (one track.getInfo per result), run in parallel.
  */
