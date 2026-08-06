@@ -29,8 +29,9 @@ export const MAP_SIZE = 1000;
 const CENTER = MAP_SIZE / 2;
 
 /**
- * Radius band for non-seed artists. R_MAX stops well short of the 500-unit edge
- * so an artist label at the outer ring still fits inside the rendered box.
+ * Radius band for non-seed artists. Only the ratio to R_MAX reaches the screen:
+ * `projectToRect` normalises by it, so R_MAX is the outer edge of the rendered
+ * plot and R_MIN the innermost ring non-seed artists can reach.
  */
 const R_MIN = 100;
 const R_MAX = 370;
@@ -67,6 +68,12 @@ export interface LaidOutNode extends MapArtist, SimulationNodeDatum {
   targetR: number;
   x: number;
   y: number;
+}
+
+/** A node placed in the rendered plot box, in px. */
+export interface ProjectedNode extends LaidOutNode {
+  px: number;
+  py: number;
 }
 
 /**
@@ -302,5 +309,56 @@ export const GUIDE_RINGS: number[] = [
   R_MIN + (R_MAX - R_MIN) * 0.33,
   R_MIN,
 ];
+
+/** The same contours as fractions of the way to the plot's edge, for `projectToRect`. */
+export const GUIDE_RING_FRACTIONS: number[] = GUIDE_RINGS.map((r) => r / R_MAX);
+
+/** Guards the division when a node sits on one of the axes. */
+const EPS = 1e-6;
+
+/**
+ * Map the square layout onto the rendered rectangle.
+ *
+ * The solve above works in a square because that is where the angle/radius
+ * separation is expressible; a screen is not square, and an inscribed circle
+ * would waste most of a laptop's width and most of a phone's height. So each
+ * node keeps its solved angle and its radius *as a fraction of R_MAX*, and is
+ * placed that fraction of the way to the rectangle's boundary along that angle.
+ * Artists on the outermost ring land on the edge — corners included — while
+ * "fraction of the way out" still means exactly what it meant before.
+ *
+ * Nothing is stretched: the projection moves points, so dots stay circular and
+ * links stay straight. And since the boundary distance is never shorter than
+ * half the rectangle's short side — the scale an inscribed square would have
+ * used — the angular clearance `placeOnRings` won can only improve here.
+ *
+ * Pure and cheap: this is what reruns on resize, never the force solve.
+ */
+export function projectToRect(
+  nodes: LaidOutNode[],
+  width: number,
+  height: number
+): ProjectedNode[] {
+  const halfW = width / 2;
+  const halfH = height / 2;
+
+  return nodes.map((node) => {
+    const angle = Math.atan2(node.y - CENTER, node.x - CENTER);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const t = node.targetR / R_MAX;
+
+    const edge = Math.min(
+      halfW / Math.max(Math.abs(cos), EPS),
+      halfH / Math.max(Math.abs(sin), EPS)
+    );
+
+    return {
+      ...node,
+      px: halfW + t * edge * cos,
+      py: halfH + t * edge * sin,
+    };
+  });
+}
 
 export { CENTER as MAP_CENTER, R_MAX as MAP_MAX_RADIUS };
