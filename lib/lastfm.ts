@@ -1,4 +1,8 @@
-import type { SimilarArtist, RecommendedTrack } from "@/lib/types";
+import type {
+  ArtistSuggestion,
+  SimilarArtist,
+  RecommendedTrack,
+} from "@/lib/types";
 
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 
@@ -65,6 +69,14 @@ interface RawTag {
   name: string;
 }
 
+interface RawArtistSearchResponse {
+  results?: {
+    artistmatches?: {
+      artist?: Array<{ name: string; listeners: string }>;
+    };
+  };
+}
+
 interface RawSimilarResponse {
   similarartists?: {
     artist?: Array<{ name: string; match: string }>;
@@ -126,18 +138,58 @@ async function getTrackTags(artist: string, track: string): Promise<string[]> {
 }
 
 /**
+ * Artists whose names match `query`, for the seed-screen typeahead.
+ *
+ * Unlike the functions below there is deliberately no per-result enrichment
+ * fan-out: this runs on keystrokes, and artist.search already returns the
+ * listener count we display. Last.fm's raw ordering is noisy and repeats names
+ * across mbids, so we dedupe by name and re-rank by popularity.
+ */
+export async function searchArtists(
+  query: string,
+  limit: number
+): Promise<ArtistSuggestion[]> {
+  const data = await lastfmFetch<RawArtistSearchResponse>("artist.search", {
+    artist: query,
+    limit,
+  });
+  const matches = data.results?.artistmatches?.artist ?? [];
+
+  const byName = new Map<string, ArtistSuggestion>();
+  for (const match of matches) {
+    const name = match.name?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (byName.has(key)) continue;
+    byName.set(key, { name, listenerCount: toNumber(match.listeners) });
+  }
+
+  return [...byName.values()]
+    .sort((a, b) => b.listenerCount - a.listenerCount)
+    .slice(0, limit);
+}
+
+/**
  * Similar artists to `artist`, enriched with each artist's listener count and tags.
  * Enrichment is an N+1 fan-out (one artist.getInfo per result), run in parallel.
+ *
+ * `skip` reaches *past* the first `skip` results to draw a window from further
+ * down the list — how later rounds find artists the earlier ones never showed.
+ * artist.getSimilar has no offset param, so we ask for `skip + limit` and drop
+ * the head. The slice happens **before** the enrichment below, which is what
+ * keeps a deep window exactly as cheap as a shallow one: the N+1 fan-out runs
+ * over `limit` artists, never over everything we skipped past.
  */
 export async function getSimilarArtists(
   artist: string,
-  limit: number
+  limit: number,
+  skip = 0
 ): Promise<SimilarArtist[]> {
   const data = await lastfmFetch<RawSimilarResponse>("artist.getSimilar", {
     artist,
-    limit,
+    limit: skip + limit,
   });
-  const similar = data.similarartists?.artist ?? [];
+  const similar = (data.similarartists?.artist ?? []).slice(skip);
 
   return Promise.all(
     similar.map(async (a) => {
@@ -150,6 +202,29 @@ export async function getSimilarArtists(
       };
     })
   );
+}
+
+/**
+ * Similar-artist names and match scores only — deliberately no getInfo
+ * enrichment, unlike `getSimilarArtists` above.
+ *
+ * This powers the taste-map similarity matrix, which needs match scores between
+ * *discovered* artists. Listener counts and tags for those artists are already
+ * known from the `getSimilarArtists` pass, so re-fetching them would be an N+1
+ * fan-out for data we hold. One flat call per artist instead of one plus N.
+ */
+export async function getSimilarNames(
+  artist: string,
+  limit: number
+): Promise<Array<{ artist: string; match: number }>> {
+  const data = await lastfmFetch<RawSimilarResponse>("artist.getSimilar", {
+    artist,
+    limit,
+  });
+  return (data.similarartists?.artist ?? []).map((a) => ({
+    artist: a.name,
+    match: Number.parseFloat(a.match) || 0,
+  }));
 }
 
 /**
