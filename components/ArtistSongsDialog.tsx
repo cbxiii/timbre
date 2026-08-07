@@ -57,8 +57,8 @@ export default function ArtistSongsDialog({
               <p className="mt-1 text-xs text-muted">
                 {node.isSeed
                   ? "One of your seed artists"
-                  : `${Math.round(node.affinity * 100)}% fit`}
-                {node.tags.length > 0 && ` · ${node.tags.slice(0, 3).join(", ")}`}
+                  : ``}
+                {node.tags.length > 0 && ` ${node.tags.slice(0, 3).join(", ")}`}
               </p>
             </div>
             <button

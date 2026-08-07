@@ -48,8 +48,14 @@ const ROUND_CARDS = 5;
 const EXPAND_SIMILAR_LIMIT = 10;
 /** Ceiling on how many new artists a single round adds to the map. */
 const MAX_NEW_ARTISTS = 10;
-/** Hard stop: the initial deck plus up to three more rounds, then the map. */
-const MAX_ROUNDS = 4;
+/** Rounds the flow runs on its own: the initial deck plus one expansion. */
+const MAX_ROUNDS = 2;
+/**
+ * The ceiling once a round has been rejected outright. A dislike-heavy round
+ * earns one extra deck — via the pivot prompt, so the user picks the direction —
+ * rather than dropping them on a map built from a pool they just rejected.
+ */
+const MAX_ROUNDS_AFTER_PIVOT = 3;
 
 /**
  * Artists pulled per seed on a pivot round, from further down that seed's
@@ -85,8 +91,8 @@ const MIN_FRESH = 8;
 
 /**
  * Everything gathered so far. Held whole rather than as scattered pieces because
- * the expansion round has to rebuild the graph from the *combined* set of both
- * rounds — a graph built from round 2 alone would drop round 1's artists.
+ * the expansion round has to rebuild the graph from the *combined* set of every
+ * round so far — a graph built from round 2 alone would drop round 1's artists.
  */
 interface Session {
   /** Every curated song from every round. The map is built from all of them. */
@@ -705,7 +711,8 @@ export default function SwipeFlow({ params }: SwipeFlowProps) {
     const session = sessionRef.current;
     if (!session) return;
 
-    if (roundRef.current >= MAX_ROUNDS) {
+    // Hard stop, whatever the verdicts say.
+    if (roundRef.current >= MAX_ROUNDS_AFTER_PIVOT) {
       setFlowPhase("done");
       return;
     }
@@ -728,8 +735,16 @@ export default function SwipeFlow({ params }: SwipeFlowProps) {
     if (dislikes / round.length >= DISLIKE_HEAVY) {
       // Rejecting this much says the pool is wrong, but not which way to move —
       // obscurer and safer are opposite corrections and the swipes can't tell
-      // them apart. So stop guessing and ask.
+      // them apart. So stop guessing and ask. This branch is also the only way
+      // past MAX_ROUNDS: the extra deck is earned by the rejection.
       setFlowPhase("awaiting");
+      return;
+    }
+
+    // Ordinary end of the loop. Two rounds is the whole session unless a round
+    // was rejected above.
+    if (roundRef.current >= MAX_ROUNDS) {
+      setFlowPhase("done");
       return;
     }
 
