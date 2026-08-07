@@ -109,8 +109,14 @@ function clamp01(n: number): number {
  * `popularityBias` reads as neutral. That covers seeds (0 by construction, and
  * pinned at radius ~0 anyway) and the autocorrect fallbacks in
  * `buildTasteMapGraph`, which have no artist-level listener count to offer.
+ *
+ * Typed structurally rather than as `MapArtist[]` so it can also rank a raw
+ * `SimilarArtist[]` window that hasn't reached the graph yet — see
+ * `selectPivotArtists` in `lib/deck.ts`. Those carry no `isSeed`, hence optional.
  */
-export function popularityRanks(artists: MapArtist[]): Map<string, number> {
+export function popularityRanks(
+  artists: Array<{ artist: string; listenerCount: number; isSeed?: boolean }>
+): Map<string, number> {
   const known = artists
     .filter((a) => !a.isSeed && a.listenerCount > 0)
     .sort((a, b) => a.listenerCount - b.listenerCount);
@@ -131,15 +137,24 @@ export function popularityRanks(artists: MapArtist[]): Map<string, number> {
  * penalty; at 100 that inverts. At 50 the tilt is exactly zero and popularity is
  * ignored, which is what keeps the neutral map identical to one with no
  * popularity signal at all.
+ *
+ * `weight` is injectable because the map and a pivot round want different
+ * magnitudes from the same rule. On the map this is a *tilt* on a radius that
+ * seed similarity should still dominate, so the default is deliberately gentle.
+ * When the user has explicitly asked for "deeper cuts", popularity is no longer
+ * a tilt but the entire request, and at the default it would lose to the spread
+ * in `match` across a candidate window. Callers who mean it pass more; the map's
+ * geometry keeps the default and is unaffected.
  */
 export function popularityBias(
   rank: number | undefined,
-  adventurousness: number
+  adventurousness: number,
+  weight: number = POPULARITY_WEIGHT
 ): number {
   if (rank === undefined) return 0;
   const tilt = adventurousness / 50 - 1; // -1 familiar … +1 surprising
   const centered = rank * 2 - 1; // -1 obscure  … +1 popular
-  return -tilt * centered * POPULARITY_WEIGHT;
+  return -tilt * centered * weight;
 }
 
 /**

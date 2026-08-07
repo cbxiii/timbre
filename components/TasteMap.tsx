@@ -180,12 +180,25 @@ export default function TasteMap({
       <header className="pointer-events-none absolute inset-x-0 top-0 p-6 text-center">
         <h2 className="text-xl font-bold text-neon">Your taste map</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted">
-          Closer to the center means a better fit. Built from{" "}
-          {visible.artists.filter((a) => a.isSeed).length} seed{" "}
-          {visible.artists.filter((a) => a.isSeed).length === 1
-            ? "artist"
-            : "artists"}{" "}
-          and {likedCount} {likedCount === 1 ? "song" : "songs"} you liked.
+          Closer to the center means a better fit.{" "}
+          {likedCount === 0 ? (
+            // No likes means every radius here is still a guess from Last.fm
+            // similarity — claiming it was "built from 0 songs you liked" would
+            // read as a bug, and claiming more would be a lie.
+            <>
+              You didn&apos;t like anything yet, so this is placed by similarity
+              to your seeds alone.
+            </>
+          ) : (
+            <>
+              Built from{" "}
+              {visible.artists.filter((a) => a.isSeed).length} seed{" "}
+              {visible.artists.filter((a) => a.isSeed).length === 1
+                ? "artist"
+                : "artists"}{" "}
+              and {likedCount} {likedCount === 1 ? "song" : "songs"} you liked.
+            </>
+          )}
         </p>
       </header>
 

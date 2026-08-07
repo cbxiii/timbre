@@ -172,16 +172,24 @@ export async function searchArtists(
 /**
  * Similar artists to `artist`, enriched with each artist's listener count and tags.
  * Enrichment is an N+1 fan-out (one artist.getInfo per result), run in parallel.
+ *
+ * `skip` reaches *past* the first `skip` results to draw a window from further
+ * down the list — how later rounds find artists the earlier ones never showed.
+ * artist.getSimilar has no offset param, so we ask for `skip + limit` and drop
+ * the head. The slice happens **before** the enrichment below, which is what
+ * keeps a deep window exactly as cheap as a shallow one: the N+1 fan-out runs
+ * over `limit` artists, never over everything we skipped past.
  */
 export async function getSimilarArtists(
   artist: string,
-  limit: number
+  limit: number,
+  skip = 0
 ): Promise<SimilarArtist[]> {
   const data = await lastfmFetch<RawSimilarResponse>("artist.getSimilar", {
     artist,
-    limit,
+    limit: skip + limit,
   });
-  const similar = data.similarartists?.artist ?? [];
+  const similar = (data.similarartists?.artist ?? []).slice(skip);
 
   return Promise.all(
     similar.map(async (a) => {
