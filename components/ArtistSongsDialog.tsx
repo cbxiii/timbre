@@ -71,6 +71,8 @@ export default function ArtistSongsDialog({
             </button>
           </div>
 
+          {/* Reachable only from a seed now: discovered artists don't make the
+              map without a song, so this copy is always literally true. */}
           {node.songs.length === 0 && (
             <p className="mt-4 text-sm text-muted">
               Everything on this map was discovered from here — the songs live

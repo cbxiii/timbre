@@ -50,14 +50,21 @@ export function buildTasteMapGraph(
     });
   }
 
+  // A discovered artist earns its place on the map by having something to show.
+  // The refine step guarantees at least one song per artist it was given
+  // candidates for, so the only artists dropped here are the ones whose Last.fm
+  // top-tracks fetch failed or came back empty — nodes that could only ever
+  // render as an unclickable label beside a dot that leads nowhere.
   for (const similar of discovered) {
+    const songs = songsByArtist.get(nameKey(similar.artist));
+    if (!songs?.length) continue;
     artists.push({
       artist: similar.artist,
       isSeed: false,
       seedMatch: similar.match,
       listenerCount: similar.listenerCount,
       tags: similar.tags,
-      songs: songsByArtist.get(nameKey(similar.artist)) ?? [],
+      songs,
     });
   }
 
@@ -65,6 +72,11 @@ export function buildTasteMapGraph(
   // than the one we asked about. Add those so every curated song is reachable on
   // the map; with no similarity score they sit at the outer edge until swipe
   // verdicts say otherwise.
+  //
+  // listenerCount is 0 rather than the track's: we never ran artist.getInfo for
+  // these names, and a *track's* listener count is a different scale entirely —
+  // borrowing it would rank them as far more obscure than they are. 0 is the
+  // pool-wide signal for "unknown", which popularityRanks skips.
   const placed = new Set(artists.map((a) => nameKey(a.artist)));
   for (const [key, group] of songsByArtist) {
     if (placed.has(key)) continue;
@@ -72,7 +84,7 @@ export function buildTasteMapGraph(
       artist: group[0].artist,
       isSeed: false,
       seedMatch: 0,
-      listenerCount: group[0].listenerCount,
+      listenerCount: 0,
       tags: group[0].tags,
       songs: group,
     });

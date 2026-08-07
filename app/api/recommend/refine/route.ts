@@ -5,6 +5,7 @@ import {
   type RefineRequest,
   type SearchParams,
   type RecommendedTrack,
+  type SwipeFeedback,
 } from "@/lib/types";
 import { RefineError, refineRecommendations } from "@/lib/refine";
 
@@ -20,6 +21,19 @@ function isRecommendedTrack(v: unknown): v is RecommendedTrack {
   if (typeof v !== "object" || v === null) return false;
   const t = v as Record<string, unknown>;
   return typeof t.title === "string" && typeof t.artist === "string";
+}
+
+/**
+ * Narrow the optional swipe feedback. Absent is valid — the first round has
+ * nothing swiped yet — but a malformed shape is not, since it would reach the
+ * prompt verbatim.
+ */
+function isSwipeFeedback(v: unknown): v is SwipeFeedback {
+  if (typeof v !== "object" || v === null) return false;
+  const f = v as Record<string, unknown>;
+  const names = (x: unknown) =>
+    Array.isArray(x) && x.every((n) => typeof n === "string");
+  return names(f.liked) && names(f.disliked);
 }
 
 /** Narrow the seed params: 1–3 artists, known moods, adventurousness 0–100. */
@@ -57,7 +71,7 @@ export async function POST(request: Request) {
   if (typeof body !== "object" || body === null) {
     return badRequest("Request body is required");
   }
-  const { params, candidates } = body as Record<string, unknown>;
+  const { params, candidates, feedback } = body as Record<string, unknown>;
   if (!isSearchParams(params)) {
     return badRequest(
       "`params` must have 1–3 artists, valid moods, and adventurousness 0–100"
@@ -69,13 +83,17 @@ export async function POST(request: Request) {
   if (!candidates.every(isRecommendedTrack)) {
     return badRequest("Each candidate must have a string `title` and `artist`");
   }
-  const refineRequest: RefineRequest = { params, candidates };
+  if (feedback !== undefined && !isSwipeFeedback(feedback)) {
+    return badRequest("`feedback` must have string arrays `liked` and `disliked`");
+  }
+  const refineRequest: RefineRequest = { params, candidates, feedback };
 
   // 3. Refine the client-supplied pool and return the curated songs.
   try {
     const result = await refineRecommendations(
       refineRequest.params,
-      refineRequest.candidates
+      refineRequest.candidates,
+      refineRequest.feedback
     );
     return NextResponse.json(result);
   } catch (err) {

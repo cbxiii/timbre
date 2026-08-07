@@ -7,6 +7,7 @@ import {
   GUIDE_RING_FRACTIONS,
   layoutTasteMap,
   projectToRect,
+  pruneDislikedArtists,
   type ProjectedNode,
 } from "@/lib/tasteMapLayout";
 import type { TasteMapGraph, Verdict } from "@/lib/types";
@@ -14,6 +15,8 @@ import type { TasteMapGraph, Verdict } from "@/lib/types";
 type TasteMapProps = {
   graph: TasteMapGraph;
   verdicts: Map<string, Verdict>;
+  /** 0–100. Tilts the radius toward the popular or the obscure. */
+  adventurousness: number;
 };
 
 /**
@@ -32,8 +35,21 @@ type TasteMapProps = {
  * keyboard activation and aria-expanded for free. Clicking one opens
  * ArtistSongsDialog with that artist's curated songs.
  */
-export default function TasteMap({ graph, verdicts }: TasteMapProps) {
-  const nodes = useMemo(() => layoutTasteMap(graph, verdicts), [graph, verdicts]);
+export default function TasteMap({
+  graph,
+  verdicts,
+  adventurousness,
+}: TasteMapProps) {
+  // Disliked artists leave the map entirely. Everything downstream reads this
+  // pruned graph, links included, so nothing is left pointing at a missing node.
+  const visible = useMemo(
+    () => pruneDislikedArtists(graph, verdicts),
+    [graph, verdicts]
+  );
+  const nodes = useMemo(
+    () => layoutTasteMap(visible, verdicts, adventurousness),
+    [visible, verdicts, adventurousness]
+  );
   const [selected, setSelected] = useState<string | null>(null);
 
   const plotRef = useRef<HTMLDivElement>(null);
@@ -105,7 +121,7 @@ export default function TasteMap({ graph, verdicts }: TasteMapProps) {
                 />
               ))}
 
-              {graph.links.map((link) => {
+              {visible.links.map((link) => {
                 const a = byName.get(link.source);
                 const b = byName.get(link.target);
                 if (!a || !b) return null;
@@ -165,8 +181,8 @@ export default function TasteMap({ graph, verdicts }: TasteMapProps) {
         <h2 className="text-xl font-bold text-neon">Your taste map</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted">
           Closer to the center means a better fit. Built from{" "}
-          {graph.artists.filter((a) => a.isSeed).length} seed{" "}
-          {graph.artists.filter((a) => a.isSeed).length === 1
+          {visible.artists.filter((a) => a.isSeed).length} seed{" "}
+          {visible.artists.filter((a) => a.isSeed).length === 1
             ? "artist"
             : "artists"}{" "}
           and {likedCount} {likedCount === 1 ? "song" : "songs"} you liked.
@@ -216,22 +232,9 @@ function ArtistLabel({
     transform: "translate(-50%, -140%)",
   };
 
-  // Artists the LLM picked no songs from still appear — they honestly show how
-  // far the search reached — but there's nothing to expand. Seeds are always
-  // interactive: candidates only come from discovered artists, so a seed
-  // normally has no songs of its own, and it still anchors the map.
-  if (node.songs.length === 0 && !node.isSeed) {
-    return (
-      <span
-        style={position}
-        title={`${node.artist} — no curated songs`}
-        className="absolute whitespace-nowrap text-[0.65rem] text-muted/50"
-      >
-        {node.artist}
-      </span>
-    );
-  }
-
+  // Every label is interactive: discovered artists reach the map only with at
+  // least one curated song, and a seed always anchors it even though candidates
+  // never come from the seeds themselves.
   const emphasis = node.isSeed
     ? "text-sm font-bold text-neon"
     : node.affinity > 0.6

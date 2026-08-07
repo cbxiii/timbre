@@ -10,6 +10,11 @@ type SwipeDeckProps = {
   verdicts: Map<string, Verdict>;
   onVerdict: (song: RecommendedSongWithDesc, verdict: Verdict) => void;
   onFinished: () => void;
+  /**
+   * Shown once the deck runs dry. SwipeFlow may append another round rather than
+   * ending here, so what "out of cards" means is its call, not ours.
+   */
+  doneMessage?: string;
 };
 
 const EXIT_MS = 300;
@@ -19,6 +24,7 @@ export default function SwipeDeck({
   verdicts,
   onVerdict,
   onFinished,
+  doneMessage = "Building your taste map…",
 }: SwipeDeckProps) {
   const [index, setIndex] = useState(0);
   const [dragX, setDragX] = useState(0);
@@ -90,10 +96,11 @@ export default function SwipeDeck({
   }
 
   if (done) {
-    // One frame at most: the effect above hands off to the taste map.
+    // Usually one frame — the effect above hands off to the taste map. But
+    // SwipeFlow may be fetching another round, in which case this is the wait.
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <p className="text-lg text-neon">Building your taste map…</p>
+        <p className="text-lg text-neon">{doneMessage}</p>
       </div>
     );
   }

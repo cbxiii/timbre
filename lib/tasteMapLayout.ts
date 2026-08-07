@@ -11,7 +11,9 @@ import type { MapArtist, TasteMapGraph, Verdict } from "@/lib/types";
  * Layout for the taste map, in two independent stages:
  *
  *   angle  ← pairwise similarity, from an ordinary force-directed solve
- *   radius ← how well the artist fits the user's taste (`artistAffinity`)
+ *   radius ← how well the artist fits the user's taste (`artistAffinity`),
+ *            which blends seed similarity, swipe verdicts, and a popularity
+ *            tilt read through the adventurousness dial
  *
  * Splitting them is what lets the map keep its promise that distance from the
  * center means fit. A single simulation carrying both would have to trade one
@@ -59,6 +61,12 @@ const ANGULAR_RELAX = 0.5;
 /** Ring the angle solve starts its nodes on. Only relative positions matter. */
 const ANGLE_INIT_R = 200;
 
+/**
+ * How far popularity can shift an artist's prior affinity, at full adventurousness
+ * tilt. Deliberately small: it is a nudge on a prior, not a competing axis.
+ */
+const POPULARITY_WEIGHT = 0.15;
+
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 export interface LaidOutNode extends MapArtist, SimulationNodeDatum {
@@ -89,18 +97,73 @@ function clamp01(n: number): number {
 }
 
 /**
+ * Each artist's popularity as a percentile within the pool: 0 is the most
+ * obscure artist on the map, 1 the most popular.
+ *
+ * Rank rather than the raw or log listener count, because listener counts are
+ * power-law distributed. Under min/max normalisation one stadium act compresses
+ * everyone else into the bottom few percent, and a log still leaves the tail
+ * lumpy and scale-dependent. A rank is scale-free and needs no tuning constant.
+ *
+ * Artists with no usable count are simply absent from the map, which
+ * `popularityBias` reads as neutral. That covers seeds (0 by construction, and
+ * pinned at radius ~0 anyway) and the autocorrect fallbacks in
+ * `buildTasteMapGraph`, which have no artist-level listener count to offer.
+ */
+export function popularityRanks(artists: MapArtist[]): Map<string, number> {
+  const known = artists
+    .filter((a) => !a.isSeed && a.listenerCount > 0)
+    .sort((a, b) => a.listenerCount - b.listenerCount);
+
+  const ranks = new Map<string, number>();
+  known.forEach((artist, i) => {
+    ranks.set(artist.artist, known.length === 1 ? 0.5 : i / (known.length - 1));
+  });
+  return ranks;
+}
+
+/**
+ * How much an artist's popularity should move its prior affinity, within
+ * ±POPULARITY_WEIGHT.
+ *
+ * Adventurousness picks the direction rather than the magnitude: at 0 the user
+ * asked for the familiar, so popular artists earn a bonus and obscure ones a
+ * penalty; at 100 that inverts. At 50 the tilt is exactly zero and popularity is
+ * ignored, which is what keeps the neutral map identical to one with no
+ * popularity signal at all.
+ */
+export function popularityBias(
+  rank: number | undefined,
+  adventurousness: number
+): number {
+  if (rank === undefined) return 0;
+  const tilt = adventurousness / 50 - 1; // -1 familiar … +1 surprising
+  const centered = rank * 2 - 1; // -1 obscure  … +1 popular
+  return -tilt * centered * POPULARITY_WEIGHT;
+}
+
+/**
  * How well an artist fits the user's taste, in 0–1.
  *
- * Starts as the artist's Last.fm similarity to the seed, then swipe evidence
- * progressively overrides it as more of that artist's songs get judged: one
- * verdict is worth half the weight, three are worth three quarters. An artist
- * whose songs never came up keeps its similarity score unchanged.
+ * Starts as the artist's Last.fm similarity to the seed — optionally nudged by
+ * `bias`, the popularity tilt above — then swipe evidence progressively
+ * overrides that prior as more of the artist's songs get judged: one verdict is
+ * worth half the weight, three are worth three quarters. An artist whose songs
+ * never came up keeps its prior unchanged.
+ *
+ * Popularity belongs in the prior rather than on top of the result because
+ * `1 - weight` already means "how much we still trust the prior". Folding it in
+ * there means a hunch about obscurity fades on exactly the same schedule as the
+ * seed similarity it sits beside, with no second fading rule to keep in sync.
  */
 export function artistAffinity(
   artist: MapArtist,
-  verdicts: Map<string, Verdict>
+  verdicts: Map<string, Verdict>,
+  bias = 0
 ): number {
   if (artist.isSeed) return 1;
+
+  const prior = clamp01(artist.seedMatch + bias);
 
   let liked = 0;
   let judged = 0;
@@ -111,11 +174,52 @@ export function artistAffinity(
     if (verdict === "like") liked++;
   }
 
-  if (judged === 0) return clamp01(artist.seedMatch);
+  if (judged === 0) return prior;
 
   const swipeScore = liked / judged;
   const weight = judged / (judged + 1);
-  return clamp01((1 - weight) * artist.seedMatch + weight * swipeScore);
+  return clamp01((1 - weight) * prior + weight * swipeScore);
+}
+
+/**
+ * Drop the artists the user swiped left on, along with every link that touched
+ * them.
+ *
+ * A dislike is a verdict on the artist, not just the song: the deck deals one
+ * card per artist, so a single left swipe is everything the user ever said about
+ * them, and the map is meant to be artists they like. Seeds are never removed —
+ * they are the frame of reference everything else is measured against.
+ *
+ * Links have to go with the nodes because TasteMap renders `graph.links`
+ * directly; left alone they would draw lines to coordinates nothing occupies.
+ * The graph is returned by identity when nothing was disliked, so the common
+ * case costs a scan and no re-layout.
+ *
+ * Lives here rather than beside `buildTasteMapGraph` because it needs `songKey`,
+ * and `lib/refine.ts` imports from that module on the server — the import would
+ * pull `d3-force` into the server bundle along with it.
+ */
+export function pruneDislikedArtists(
+  graph: TasteMapGraph,
+  verdicts: Map<string, Verdict>
+): TasteMapGraph {
+  const removed = new Set<string>();
+  for (const artist of graph.artists) {
+    if (artist.isSeed) continue;
+    const disliked = artist.songs.some(
+      (song) => verdicts.get(songKey(song)) === "dislike"
+    );
+    if (disliked) removed.add(artist.artist);
+  }
+
+  if (removed.size === 0) return graph;
+
+  return {
+    artists: graph.artists.filter((a) => !removed.has(a.artist)),
+    links: graph.links.filter(
+      (l) => !removed.has(l.source) && !removed.has(l.target)
+    ),
+  };
 }
 
 function collideRadius(node: LaidOutNode): number {
@@ -259,20 +363,33 @@ function placeOnRings(nodes: LaidOutNode[], solvedAngles: Map<string, number>): 
 /**
  * Lay the graph out in the fixed MAP_SIZE coordinate space.
  *
- * Deterministic: same graph plus same verdicts always yields the same
- * coordinates. Seeds are placed analytically and pinned, which both anchors the
- * layout and keeps the solve stable.
+ * Deterministic: the same graph, verdicts and adventurousness always yield the
+ * same coordinates. Seeds are placed analytically and pinned, which both anchors
+ * the layout and keeps the solve stable.
+ *
+ * `adventurousness` reaches only the radius, via the popularity tilt. Angles come
+ * from pairwise similarity alone, so turning the dial slides artists in and out
+ * along fixed bearings rather than rearranging the map.
  */
 export function layoutTasteMap(
   graph: TasteMapGraph,
-  verdicts: Map<string, Verdict>
+  verdicts: Map<string, Verdict>,
+  adventurousness = 50
 ): LaidOutNode[] {
   const seeds = graph.artists.filter((a) => a.isSeed);
   const seedRing = seeds.length > 1 ? SEED_RING : 0;
   let seedIndex = 0;
 
+  // Ranked once over the whole pool: a percentile is only meaningful relative to
+  // the other artists on this particular map.
+  const ranks = popularityRanks(graph.artists);
+
   const nodes: LaidOutNode[] = graph.artists.map((artist) => {
-    const affinity = artistAffinity(artist, verdicts);
+    const affinity = artistAffinity(
+      artist,
+      verdicts,
+      popularityBias(ranks.get(artist.artist), adventurousness)
+    );
     const targetR = artist.isSeed
       ? seedRing
       : R_MIN + (R_MAX - R_MIN) * (1 - affinity);

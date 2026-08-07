@@ -38,11 +38,24 @@ export interface RecommendedTrack {
   tags: string[];
 }
 
+/**
+ * What the user's swipes said so far, by artist. Sent to the refine step on the
+ * expansion round so the curation is steered by real verdicts, not just the seed.
+ */
+export interface SwipeFeedback {
+  /** Artists whose card was swiped right. */
+  liked: string[];
+  /** Artists whose card was swiped left. */
+  disliked: string[];
+}
+
 /** The body POSTed to `/api/recommend/refine`: the user's seed params plus the
  * candidate pool the client assembled from `/similar` + `/top-tracks`. */
 export interface RefineRequest {
   params: SearchParams;
   candidates: RecommendedTrack[];
+  /** Absent on the first round — there is nothing swiped to learn from yet. */
+  feedback?: SwipeFeedback;
 }
 
 /**
@@ -73,11 +86,18 @@ export interface MapArtist {
   isSeed: boolean;
   /** Best 0–1 Last.fm match against any seed; 1 for seeds themselves. */
   seedMatch: number;
-  /** Global listener count, from artist.getInfo. 0 for seeds. */
+  /**
+   * Global listener count, from artist.getInfo. 0 means "unknown" — seeds, and
+   * any artist we never ran getInfo on — and the popularity tilt skips those.
+   */
   listenerCount: number;
   /** Top tags, from artist.getInfo. Empty for seeds. */
   tags: string[];
-  /** Curated songs by this artist from the refine step; may be empty. */
+  /**
+   * Curated songs by this artist from the refine step. Always non-empty for
+   * discovered artists — one is the price of admission to the map — and empty
+   * for seeds, which are never expanded for candidates of their own.
+   */
   songs: RecommendedSongWithDesc[];
 }
 
